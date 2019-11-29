@@ -187,6 +187,20 @@ def _add_child(parent, child, source):
         parent.append(child)
 
 
+def _get_locator_from_source_mobs(mobs: list):
+    """Given a list of source mobs try to get the first locator TODO: Is it possible to have 2 locators?
+    """
+    for source_mob in mobs:
+        try:
+            essance_description = next(prop for _, prop in source_mob.property_entries.items() if prop.name == 'EssenceDescription')
+            if 'locator' in dir(essance_description.value):
+                return next(p.value for _, p in essance_description.value.locator[0].property_entries.items())
+        except StopIteration:
+            continue
+    # print("No Essence was find in source clip")
+    return None
+
+
 def _transcribe(item, parents, editRate, masterMobs):
     result = None
     metadata = {}
@@ -298,27 +312,9 @@ def _transcribe(item, parents, editRate, masterMobs):
         mastermob = child_mastermob or parent_mastermob or None
 
         if mastermob:
-            # get target path
             mastermob_child = masterMobs.get(str(mastermob.mob_id))
-            target_path = (mastermob_child.metadata.get("AAF", {})
-                                                   .get("UserComments", {})
-                                                   .get("UNC Path"))
-            if not target_path:
-                # retrieve locator form the MasterMob's Essence
-                for mobslot in mastermob.slots:
-                    if isinstance(mobslot.segment, aaf2.components.SourceClip):
-                        sourcemob = mobslot.segment.mob
-                        locator = None
-                        # different essences store locators in different places
-                        if (isinstance(sourcemob.descriptor,
-                                       aaf2.essence.DigitalImageDescriptor)
-                                and sourcemob.descriptor.locator):
-                            locator = sourcemob.descriptor.locator[0]
-                        elif "Locator" in sourcemob.descriptor.keys():
-                            locator = sourcemob.descriptor["Locator"].value[0]
-
-                        if locator:
-                            target_path = locator["URLString"].value
+            # get target path
+            target_path = _get_locator_from_source_mobs(mobs) or None
 
             # if we have target path, create an ExternalReference, otherwise
             # create an MissingReference.
